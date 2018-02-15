@@ -1,20 +1,41 @@
 import requests
 from bs4 import BeautifulSoup
-import urllib
-import time
-import sys
+from urllib import parse
+import argparse
+from validator import url as validate_url
+from webpage_gen import write_pages
+
+articls = list()
 
 
-start_url = "wiki/Python_(programming_language)"
-target_url = "https://en.wikipedia.org/wiki/Philosophy"
-wikipidia_base = "https://en.wikipedia.org/"
-articls = []
+def main():
+    global articls
+    parser = setup_parser()
+    parsed = parser.parse_args()
+    
+    start_url, target_url= urls(parsed.start,parsed.target)
+    maxp=parsed.maxp
+    crawl_wikipidia(start_url,target_url,maxp)
+    write_pages(articls)
+    print('Done!')
+
+def urls(start,target):
+    if validate_url(start) and validate_url(target) and 'wikipedia' in start and 'wikipedia' in target
+        start_url = urlparse(start).path[1:]
+        target_url = urlparse(target).path[1:]
+        return start_url,target_url
+    else:
+        print('invalide urls')
+        exit()
 
 
-def crawl_wikipidia(url):
-    url = urllib.parse.urljoin(wikipidia_base, url)
+def crawl_wikipidia(url, target_url,maxp):
+    global articls
+    wikipidia_base = 'https://en.wikipedia.org/'
+    url = parse.urljoin(wikipidia_base, url)
     counter=1
-    while continue_to_crawle(url):
+    
+    while continue_to_crawle(url) and len(articls)!=maxp:
         print(counter,url)
         html = requests.get(url)
         if html.status_code == 200:
@@ -26,29 +47,36 @@ def crawl_wikipidia(url):
             print('Error {} while trying to access page {}'.format(html.status_code,url))
             exit(-1)
         counter+=1
-        #time.sleep(1) 
+    
     print("Done")
 
 
 def continue_to_crawle(url):
-    if len(articls)==100:
-        write_pages()
-        exit(-1)
-    elif url == target_url:
+    """
+    this function decides if we should continue to crawle or not
+    """
+    global articls
+    ctc=True
+    if url == target_url:
         print('Success :\n\ttarget page \'{}\' reached after crawling ({}) pages\n\tall visited urls are in pages.html'.format(target_url, len(articls)))
         articls.append(['target',target_url])
-        write_pages()
-        return False
+        ctc= False
     for articl in articls:
         if url == articl[1]:
             print('Error: Page Visited twice :\n\turl {} was already visited'.format(url))
-            write_pages()
-            return False
+            ctc= False
+            break
     else:
-        return True
+        ctc= True
+    
+    return ctc
 
 
 def get_first_url(soup):
+    """
+    this function fetchs the 1st url in a wikipidia page 
+    """
+    global wikipidia_base
     try:
         content=soup.find(id='mw-content-text').find(class_='mw-parser-output').find('p')
         for sp in soup.find(id='mw-content-text').find(class_='mw-parser-output').find('p').find_all('span'):
@@ -56,7 +84,7 @@ def get_first_url(soup):
         for sp in soup.find(id='mw-content-text').find(class_='mw-parser-output').find('p').find_all('sup'):
             sp.decompose()
         url=content.a.get('href')
-        return urllib.parse.urljoin(wikipidia_base, url)
+        return parse.urljoin(wikipidia_base, url)
     except AttributeError:
         print('Dead-end page reached before getting to target page')
         print('\tall visited urls are in pages.html')
@@ -64,39 +92,34 @@ def get_first_url(soup):
         exit(-1)
 
 
-def write_pages():
-    with open('pages.html', 'w') as output:
-        html_begin = '''
-        <!doctype html>
-        <html lang="en">
-            <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-                <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.2/css/bootstrap.min.css" integrity="sha384-PsH8R72JQ3SOdhVi3uxftmaW6Vc51MKb0q5P2rRUpPvrszuE4W1povHYgTpBfshb" crossorigin="anonymous">
-                <title>Visited pages</title>
-            </head>
-            <body>
-            <table class="table">
-            <thead>
-                <tr>
-                <th scope="col">#</th>
-                <th scope="col">Page</th>
-                </tr>
-            </thead>
-            <tbody>'''
-        html_end = '''</tbody></table></body></html>'''
-        tb_contet=fill_table()
-        print(html_begin+tb_contet+html_end,file=output,end='')
-        #output.write(html_begin+tb_contet+html_end)
 
-def fill_table():
-    print('fill_table')
-    content=''
-    for counter,articl in enumerate (articls):
-        content+='<tr><th scope="row">{0}</th><td><a href="{2}">{1}</a></td></tr>'.format(counter,articl[0],articl[1])
-    return content
+def setup_parser():
+    """
+    this methose setup the argparser
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--start',
+        required=True,
+        help='wikipidia page url to start with',
+        type=str
+    )
+    parser.add_argument(
+        '--target',
+        required=True,
+        help='wikipidia page url to stop at',
+        type=str
+    )
+    parser.add_argument(
+        '--maxp',
+        required=False,
+        help='maximum of visited pages to stop at if target not reached\ndefault is 100\n enter -1 for no limits',
+        type=int,
+        default=100
+    )
+    return parser
 
 
-
-crawl_wikipidia(start_url)
+if __name__ == "__main__":
+    main()
 
